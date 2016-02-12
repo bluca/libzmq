@@ -232,6 +232,9 @@ namespace zmq
         //  will be used as the File Descriptor instead of allocating a new
         //  one via the socket () system call.
         int use_fd;
+
+        int generic_opt;
+        void *generic_val;
     };
 }
 

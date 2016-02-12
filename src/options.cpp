@@ -77,7 +77,9 @@ zmq::options_t::options_t () :
     heartbeat_ttl (0),
     heartbeat_interval (0),
     heartbeat_timeout (-1),
-    use_fd (-1)
+    use_fd (-1),
+    generic_opt(0),
+    generic_val(NULL)
 {
     memset (curve_public_key, 0, CURVE_KEYSIZE);
     memset (curve_secret_key, 0, CURVE_KEYSIZE);
@@ -89,6 +91,8 @@ zmq::options_t::options_t () :
     vmci_connect_timeout = -1;
 #endif
 }
+
+//TODO: add destructor to free generic_val
 
 int zmq::options_t::setsockopt (int option_, const void *optval_,
     size_t optvallen_)
@@ -618,6 +622,18 @@ int zmq::options_t::setsockopt (int option_, const void *optval_,
             }
             break;
 
+        case ZMQ_SOCKOPT_ANY:
+            if (optvallen_ > sizeof (int)) {
+                generic_opt = *((int *)optval_);
+                if (generic_val)
+                    free (generic_val);
+                generic_val = malloc (optvallen_ - sizeof (int));
+                zmq_assert(generic_val);
+                memcpy (generic_val, (int *)optval_ + 1, optvallen_ - sizeof (int));
+                return 0;
+            }
+            break;
+
         default:
 #if defined (ZMQ_ACT_MILITANT)
             //  There are valid scenarios for probing with unknown socket option
@@ -1017,6 +1033,17 @@ int zmq::options_t::getsockopt (int option_, void *optval_, size_t *optvallen_) 
         case ZMQ_USE_FD:
             if (is_int) {
                 *value = use_fd;
+                return 0;
+            }
+            break;
+
+        case ZMQ_SOCKOPT_ANY:
+            if (*optvallen_ > sizeof (int)) {
+                *((int *)optval_) = generic_opt;
+                if (generic_val)
+                    memcpy (((int *)optval_) + 1, generic_val, *optvallen_ - sizeof (int));
+                else
+                    memset (((int *)optval_) + 1, 0, *optvallen_ - sizeof (int));
                 return 0;
             }
             break;

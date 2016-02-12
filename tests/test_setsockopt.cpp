@@ -126,9 +126,69 @@ void test_setsockopt_use_fd ()
     zmq_ctx_term (ctx);
 }
 
+void test_setsockopt_gen_sockopt ()
+{
+    int rc;
+    void *ctx = zmq_ctx_new ();
+    void *socket = zmq_socket (ctx, ZMQ_PUSH);
+
+    int val_single[2] = {4, 8};
+    size_t val_size = sizeof (int) * 2;
+
+    rc = zmq_getsockopt (socket, ZMQ_SOCKOPT_ANY, val_single, &val_size);
+    assert(rc == 0);
+    assert(val_single[0] == 0);
+    assert(val_single[1] == 0);
+
+    val_single[0] = 16;
+    val_single[1] = 32;
+
+    val_size = sizeof (int) * 2;
+    rc = zmq_setsockopt (socket, ZMQ_SOCKOPT_ANY, val_single, val_size);
+    assert(rc == 0);
+    assert(val_single[0] == 16);
+    assert(val_single[1] == 32);
+
+    val_single[0] = 0;
+    val_single[1] = 0;
+
+    rc = zmq_getsockopt (socket, ZMQ_SOCKOPT_ANY, val_single, &val_size);
+    assert(rc == 0);
+    assert(val_single[0] == 16);
+    assert(val_single[1] == 32);
+
+    int val_empty = 5;
+    val_size = sizeof (int);
+    rc = zmq_setsockopt (socket, ZMQ_SOCKOPT_ANY, &val_empty, val_size);
+    assert (rc != 0);
+    assert (val_empty == 5);
+
+    rc = zmq_getsockopt (socket, ZMQ_SOCKOPT_ANY, &val_empty, &val_size);
+    assert(rc != 0);
+    assert (val_empty == 5);
+
+    int val_multiple[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    val_size = sizeof (int) * 10;
+    rc = zmq_setsockopt (socket, ZMQ_SOCKOPT_ANY, val_multiple, val_size);
+    assert(rc == 0);
+    for (int value = 0; value < 10; ++value)
+        assert (val_multiple[value] == value);
+
+    memset (val_multiple, 0, val_size);
+
+    rc = zmq_getsockopt (socket, ZMQ_SOCKOPT_ANY, val_multiple, &val_size);
+    assert(rc == 0);
+    for (int value = 0; value < 10; ++value)
+        assert (val_multiple[value] == value);
+
+    zmq_close (socket);
+    zmq_ctx_term (ctx);
+}
+
 int main (void)
 {
     test_setsockopt_tcp_recv_buffer ();
     test_setsockopt_tcp_send_buffer ();
     test_setsockopt_use_fd ();
+    test_setsockopt_gen_sockopt ();
 }
