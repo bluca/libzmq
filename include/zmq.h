@@ -68,7 +68,7 @@ extern "C" {
 #   elif defined DLL_EXPORT
 #       define ZMQ_EXPORT __declspec(dllexport)
 #   else
-#       define ZMQ_EXPORT __declspec(dllimport)
+#       define ZMQ_EXPORT __declspec(dllimport)f
 #   endif
 #else
 #   if defined __SUNPRO_C  || defined __SUNPRO_CC
@@ -411,6 +411,9 @@ ZMQ_EXPORT int zmq_recv (void *s, void *buf, size_t len, int flags);
 ZMQ_EXPORT int zmq_socket_monitor (void *s, const char *addr, int events);
 ZMQ_EXPORT int zmq_join (void *s, const char *group);
 ZMQ_EXPORT int zmq_leave (void *s, const char *group);
+ZMQ_EXPORT int setsockopt_posix (int optname, const void *optval,
+    socklen_t optlen_);
+ZMQ_EXPORT int getsockopt_posix (int optname, void *optval, socklen_t *optlen);
 
 
 /******************************************************************************/

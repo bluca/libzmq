@@ -33,6 +33,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <list>
 
 #include "stddef.h"
 #include "stdint.hpp"
@@ -58,6 +59,11 @@ namespace zmq
         int getsockopt (int option_, void *optval_, size_t *optvallen_) const;
 
         bool is_valid (int option_) const;
+
+        int setsockopt_posix (int optname_, const void *optval_,
+                socklen_t optlen_);
+        int getsockopt_posix (int optname_, void *optval_,
+                socklen_t *optlen_);
 
         //  High-water marks for message pipes.
         int sndhwm;
@@ -233,6 +239,8 @@ namespace zmq
         //  one via the socket () system call.
         int use_fd;
 
+        typedef std::list <void *> generic_sockopts;
+        generic_sockopts gen_sockopts_list;
         int generic_opt;
         void *generic_val;
     };

@@ -1037,7 +1037,7 @@ int zmq::options_t::getsockopt (int option_, void *optval_, size_t *optvallen_) 
             }
             break;
 
-        case ZMQ_SOCKOPT_ANY:
+        case ZMQ_SOCKOPT_ANY_ADD:
             if (*optvallen_ > sizeof (int)) {
                 *((int *)optval_) = generic_opt;
                 if (generic_val)
@@ -1066,4 +1066,82 @@ bool zmq::options_t::is_valid (int option_) const
 {
     LIBZMQ_UNUSED (option_);
     return true;
+}
+
+int zmq::options_t::setsockopt_posix (int optname_, const void *optval_,
+        socklen_t optlen_)
+{
+    bool is_int = (optvallen_ == sizeof (int));
+    int value = 0;
+    if (is_int) memcpy(&value, optval_, sizeof (int));
+#if defined (ZMQ_ACT_MILITANT)
+    bool malformed = true;          //  Did caller pass a bad option value?
+#endif
+            default:
+    #if defined (ZMQ_ACT_MILITANT)
+                //  There are valid scenarios for probing with unknown socket option
+                //  values, e.g. to check if security is enabled or not. This will not
+                //  provoke a militant assert. However, passing bad values to a valid
+                //  socket option will, if ZMQ_ACT_MILITANT is defined.
+                malformed = false;
+    #endif
+                break;
+
+    #if defined (ZMQ_ACT_MILITANT)
+        //  There is no valid use case for passing an error back to the application
+        //  when it sent malformed arguments to a socket option. Use ./configure
+        //  --with-militant to enable this checking.
+        if (malformed)
+            zmq_assert (false);
+    #endif
+        errno = EINVAL;
+        return -1;
+}
+
+int zmq::options_t::getsockopt_posix (int optname_, void *optval_,
+        socklen_t *optlen_)
+{
+    int err = 0;
+#ifdef ZMQ_HAVE_HPUX
+    int len = sizeof err;
+#else
+    socklen_t len = sizeof err;
+#endif
+
+    const int rc = getsockopt (s, SOL_SOCKET, SO_ERROR, (char*) &err, &len);
+
+    //  Assert if the error was caused by 0MQ bug.
+    //  Networking problems are OK. No need to assert.
+#ifdef ZMQ_HAVE_WINDOWS
+    zmq_assert (rc == 0);
+    if (err != 0) {
+        if (err == WSAEBADF ||
+            err == WSAENOPROTOOPT ||
+            err == WSAENOTSOCK ||
+            err == WSAENOBUFS)
+        {
+            wsa_assert_no (err);
+        }
+        return retired_fd;
+    }
+#else
+    //  Following code should handle both Berkeley-derived socket
+    //  implementations and Solaris.
+    if (rc == -1)
+        err = errno;
+    if (err != 0) {
+        errno = err;
+        errno_assert (
+            errno != EBADF &&
+            errno != ENOPROTOOPT &&
+            errno != ENOTSOCK &&
+            errno != ENOBUFS);
+        return retired_fd;
+    }
+#endif
+
+    //  Return the newly connected socket.
+    const fd_t result = s;
+    s = retired_fd;
+    return result;
 }
