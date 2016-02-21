@@ -71,13 +71,14 @@ zmq::udp_engine_t::~udp_engine_t()
     }
 }
 
-int zmq::udp_engine_t::init (address_t *address_, bool send_, bool recv_)
+int zmq::udp_engine_t::init (address_t *address_, bool send_, bool recv_, int rtdomain_)
 {
     zmq_assert (address_);
     zmq_assert (send_ || recv_);
     send_enabled = send_;
     recv_enabled = recv_;
     address = address_;
+    rtdomain = rtdomain_;
 
     fd = open_socket (address->resolved.udp_addr->family (), SOCK_DGRAM, IPPROTO_UDP);
     if (fd == retired_fd)
@@ -122,6 +123,10 @@ void zmq::udp_engine_t::plug (io_thread_t* io_thread_, session_base_t *session_)
 #else
         errno_assert (rc == 0);
 #endif
+
+        //  Set the Routing Domain on the underlying socket.
+        if (rtdomain >= 1)
+            set_rtdomain (fd, rtdomain);
 
         rc = bind (fd, address->resolved.udp_addr->bind_addr (),
                        address->resolved.udp_addr->bind_addrlen ());

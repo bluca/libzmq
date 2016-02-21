@@ -21,7 +21,7 @@ namespace zmq
             udp_engine_t (const options_t &options_);
             ~udp_engine_t ();
 
-            int init (address_t *address_, bool send_, bool recv_);
+            int init (address_t *address_, bool send_, bool recv_, int rtdomain_);
 
             //  i_engine interface implementation.
             //  Plug the engine to the session.
@@ -66,6 +66,7 @@ namespace zmq
             unsigned char in_buffer[MAX_UDP_MSG];
             bool send_enabled;
             bool recv_enabled;
+            int rtdomain;
     };
 }
 

@@ -592,7 +592,7 @@ void zmq::session_base_t::start_connecting (bool wait_)
             recv = true;
         }
 
-        int rc = engine->init (addr, send, recv);
+        int rc = engine->init (addr, send, recv, options.rtdomain);
         errno_assert (rc == 0);
 
         send_attach (this, engine);
