@@ -318,6 +318,10 @@ int zmq::tcp_connecter_t::open ()
     if (options.tos != 0)
         set_ip_type_of_service (s, options.tos);
 
+    //  Set the Routing Domain on the underlying socket.
+    if (options.rtdomain >= 1)
+        set_rtdomain (s, options.rtdomain);
+
     // Set a source address for conversations
     if (tcp_addr->has_src_addr ()) {
         //  Allow reusing of the address, to connect to different servers
