@@ -240,6 +240,10 @@ namespace zmq
         //  will be used as the File Descriptor instead of allocating a new
         //  one via the socket () system call.
         int use_fd;
+
+        //  When creating a new ZMQ socket, if this option is set the value
+        //  will be used to set the Routing Domain on the socket.
+        int rtdomain;
     };
 }
 

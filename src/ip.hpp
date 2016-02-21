@@ -56,6 +56,9 @@ namespace zmq
     // Return 0 on success, -1 if the connection has been closed by the peer
     int set_nosigpipe (fd_t s_);
 
+    //  Set SO_RTDOMAIN socket option
+    void set_rtdomain (fd_t sockfd_, int rtdomain_);
+
 }
 
 #endif

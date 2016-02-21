@@ -110,9 +110,46 @@ void test_setsockopt_use_fd ()
     zmq_ctx_term (ctx);
 }
 
+void test_setsockopt_rtdomain ()
+{
+    int rc;
+    void *ctx = zmq_ctx_new ();
+    void *socket = zmq_socket (ctx, ZMQ_PUSH);
+
+    int val = 0;
+    size_t placeholder = sizeof (val);
+
+    rc = zmq_getsockopt (socket, ZMQ_RTDOMAIN, &val, &placeholder);
+    assert(rc == 0);
+    assert(val == -1);
+
+    val = 3;
+
+    rc = zmq_setsockopt (socket, ZMQ_RTDOMAIN, &val, sizeof(val));
+    assert(rc == 0);
+    assert(val == 3);
+
+    rc = zmq_getsockopt (socket, ZMQ_RTDOMAIN, &val, &placeholder);
+    assert(rc == 0);
+    assert(val == 3);
+
+    val = 0;
+
+    rc = zmq_setsockopt (socket, ZMQ_RTDOMAIN, &val, sizeof(val));
+    assert(rc == -1);
+
+    rc = zmq_getsockopt (socket, ZMQ_RTDOMAIN, &val, &placeholder);
+    assert(rc == 0);
+    assert(val == 3);
+
+    zmq_close (socket);
+    zmq_ctx_term (ctx);
+}
+
 int main (void)
 {
     test_setsockopt_tcp_recv_buffer ();
     test_setsockopt_tcp_send_buffer ();
     test_setsockopt_use_fd ();
+    test_setsockopt_rtdomain ();
 }

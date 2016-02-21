@@ -770,6 +770,19 @@ Default value:: 0
 Applicable socket types:: ZMQ_ROUTER
 
 
+ZMQ_RTDOMAIN: Set kernel Routing Domain ID
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The 'ZMQ_RTDOMAIN' option shall set the underlying kernel Routing Domain ID
+for the specified 'socket'. For details refer to the Linux kernel userspace
+documentation for the 'SO_RTDOMAIN' socket option.
+
+[horizontal]
+Option value type:: int
+Option value unit:: Routing Domain ID, 1 or greater
+Default value:: -1
+Applicable socket types:: all, when using TCP or UDP transports on Linux
+
+
 ZMQ_SNDBUF: Set kernel transmit buffer size
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The 'ZMQ_SNDBUF' option shall set the underlying kernel transmit buffer size

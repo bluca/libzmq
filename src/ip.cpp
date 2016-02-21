@@ -217,3 +217,12 @@ int zmq::set_nosigpipe (fd_t s_)
 
     return 0;
 }
+
+void zmq::set_rtdomain (fd_t sockfd_, int rtdomain_)
+{
+#if defined (ZMQ_HAVE_LINUX) && defined (SO_RTDOMAIN)
+    const int rc = setsockopt (sockfd_, SOL_SOCKET, SO_RTDOMAIN,
+        (void *) &rtdomain_, sizeof rtdomain_);
+    errno_assert (rc == 0 || errno == ENOPROTOOPT);
+#endif
+}
