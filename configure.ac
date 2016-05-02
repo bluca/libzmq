@@ -67,6 +67,10 @@ AC_PATH_PROG([ASCIIDOC], [asciidoc])
 LIBZMQ_CONFIG_LIBTOOL
 AC_LIBTOOL_WIN32_DLL
 AC_PROG_LIBTOOL
+AX_VALGRIND_DFLT([sgcheck], [off])
+AX_VALGRIND_DFLT([helgrind], [off])
+AX_VALGRIND_DFLT([drd], [off])
+AX_VALGRIND_DFLT([memcheck], [on])
 AX_VALGRIND_CHECK
 
 # Check whether to build a with debug symbols

@@ -24,4 +24,4 @@ elif [ $CURVE == "libsodium" ]; then
 fi
 
 # Build, check, and install from local source
-( cd ../..; ./autogen.sh && ./configure "${CONFIG_OPTS[@]}" && make -j5 && make VERBOSE=1 check-valgrind-memcheck) || exit 1
+( cd ../..; ./autogen.sh && ./configure "${CONFIG_OPTS[@]}" && make -j5 && make VERBOSE=1 check-valgrind) || exit 1

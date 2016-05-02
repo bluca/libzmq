@@ -792,5 +792,7 @@ maintainer-clean-local:
 	-rm -rf $(top_srcdir)/config
 
 @VALGRIND_CHECK_RULES@
+VALGRIND_FLAGS = --trace-children=yes
+VALGRIND_memcheck_FLAGS = --leak-check=full
 
 VALGRIND_SUPPRESSIONS_FILES = builds/valgrind/valgrind.supp
