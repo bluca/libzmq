@@ -232,7 +232,7 @@ ZMQ_EXPORT int zmq_ctx_destroy (void *context);
 /* union here ensures correct alignment on architectures that require it, e.g.
  * SPARC
  */
-typedef union zmq_msg_t {unsigned char _ [64]; void *p; } zmq_msg_t;
+typedef union zmq_msg_t {unsigned char _ [128]; void *p; } zmq_msg_t;
 
 typedef void (zmq_free_fn) (void *data, void *hint);
 

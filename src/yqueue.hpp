@@ -53,11 +53,10 @@ namespace zmq
     //  actual memory allocation is required).
 #ifdef HAVE_POSIX_MEMALIGN
     // ALIGN is the memory alignment size to use in the case where we have
-    // posix_memalign available. Default value is 64, this alignment will
+    // posix_memalign available. Default value is 128, this alignment will
     // prevent two queue chunks from occupying the same CPU cache line on
-    // architectures where cache lines are <= 64 bytes (e.g. most things
-    // except POWER).
-    template <typename T, int N, size_t ALIGN = 64> class yqueue_t
+    // architectures where cache lines are <= 128 bytes (e.g. most things).
+    template <typename T, int N, size_t ALIGN = 128> class yqueue_t
 #else
     template <typename T, int N> class yqueue_t
 #endif

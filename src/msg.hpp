@@ -133,7 +133,7 @@ namespace zmq
 
         //  Size in bytes of the largest message that is still copied around
         //  rather than being reference-counted.
-        enum { msg_t_size = 64 };
+        enum { msg_t_size = 128 };
         enum { max_vsm_size = msg_t_size - (sizeof (metadata_t *) +
                                             3 +
                                             16 +
