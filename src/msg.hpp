@@ -69,7 +69,7 @@ namespace zmq
             size_t size;
             msg_free_fn *ffn;
             void *hint;
-            zmq::atomic_counter_t refcnt;
+            zmq::inline_atomic_counter_t refcnt;
         };
 
         //  Message flags.
@@ -139,7 +139,7 @@ namespace zmq
                                             16 +
                                             sizeof (uint32_t))};
     private:
-        zmq::atomic_counter_t* refcnt();
+        zmq::inline_atomic_counter_t* refcnt();
 
         //  Different message types.
         enum type_t
@@ -193,9 +193,9 @@ namespace zmq
             } vsm;
             struct {
                 metadata_t *metadata;
-                content_t *content;
+                content_t content;
                 unsigned char unused [msg_t_size - (sizeof (metadata_t *) +
-                                                    sizeof (content_t*) +
+                                                    sizeof (content_t) +
                                                     2 +
                                                     16 +
                                                     sizeof (uint32_t))];

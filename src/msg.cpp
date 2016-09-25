@@ -105,19 +105,16 @@ int zmq::msg_t::init_size (size_t size_)
         u.lmsg.flags = 0;
         u.lmsg.group[0] = '\0';
         u.lmsg.routing_id = 0;
-        u.lmsg.content = NULL;
-        if (sizeof (content_t) + size_ > size_)
-            u.lmsg.content = (content_t*) malloc (sizeof (content_t) + size_);
-        if (unlikely (!u.lmsg.content)) {
+        u.lmsg.content.data = malloc (size_);
+        if (unlikely (!u.lmsg.content.data)) {
             errno = ENOMEM;
             return -1;
         }
 
-        u.lmsg.content->data = u.lmsg.content + 1;
-        u.lmsg.content->size = size_;
-        u.lmsg.content->ffn = NULL;
-        u.lmsg.content->hint = NULL;
-        new (&u.lmsg.content->refcnt) zmq::atomic_counter_t ();
+        u.lmsg.content.size = size_;
+        u.lmsg.content.ffn = NULL;
+        u.lmsg.content.hint = NULL;
+        zmq::atomic_set (&u.lmsg.content.refcnt, 0);
     }
     return 0;
 }
@@ -139,7 +136,7 @@ int zmq::msg_t::init_external_storage(content_t* content_, void* data_, size_t s
     u.zclmsg.content->size = size_;
     u.zclmsg.content->ffn = ffn_;
     u.zclmsg.content->hint = hint_;
-    new (&u.zclmsg.content->refcnt) zmq::atomic_counter_t();
+    zmq::atomic_set (&u.zclmsg.content->refcnt, 0);
 
     return 0;
 }
@@ -167,17 +164,11 @@ int zmq::msg_t::init_data (void *data_, size_t size_,
         u.lmsg.flags = 0;
         u.lmsg.group[0] = '\0';
         u.lmsg.routing_id = 0;
-        u.lmsg.content = (content_t*) malloc (sizeof (content_t));
-        if (!u.lmsg.content) {
-            errno = ENOMEM;
-            return -1;
-        }
-
-        u.lmsg.content->data = data_;
-        u.lmsg.content->size = size_;
-        u.lmsg.content->ffn = ffn_;
-        u.lmsg.content->hint = hint_;
-        new (&u.lmsg.content->refcnt) zmq::atomic_counter_t ();
+        u.lmsg.content.data = data_;
+        u.lmsg.content.size = size_;
+        u.lmsg.content.ffn = ffn_;
+        u.lmsg.content.hint = hint_;
+        zmq::atomic_set (&u.lmsg.content.refcnt, 0);
     }
     return 0;
 
@@ -226,16 +217,17 @@ int zmq::msg_t::close ()
         //  If the content is not shared, or if it is shared and the reference
         //  count has dropped to zero, deallocate it.
         if (!(u.lmsg.flags & msg_t::shared) ||
-              !u.lmsg.content->refcnt.sub (1)) {
+              !zmq::atomic_sub (&u.lmsg.content.refcnt, 1)) {
 
             //  We used "placement new" operator to initialize the reference
             //  counter so we call the destructor explicitly now.
-            u.lmsg.content->refcnt.~atomic_counter_t ();
+            //u.lmsg.content.refcnt.~inline_atomic_counter_t ();
 
-            if (u.lmsg.content->ffn)
-                u.lmsg.content->ffn (u.lmsg.content->data,
-                    u.lmsg.content->hint);
-            free (u.lmsg.content);
+            if (u.lmsg.content.ffn)
+                u.lmsg.content.ffn (u.lmsg.content.data,
+                    u.lmsg.content.hint);
+            else
+                free (u.lmsg.content.data);
         }
     }
 
@@ -246,11 +238,11 @@ int zmq::msg_t::close ()
         //  If the content is not shared, or if it is shared and the reference
         //  count has dropped to zero, deallocate it.
         if (!(u.zclmsg.flags & msg_t::shared) ||
-            !u.zclmsg.content->refcnt.sub (1)) {
+            !zmq::atomic_sub (&u.zclmsg.content->refcnt, 1)) {
 
             //  We used "placement new" operator to initialize the reference
             //  counter so we call the destructor explicitly now.
-            u.zclmsg.content->refcnt.~atomic_counter_t ();
+            //u.zclmsg.content->refcnt.~inline_atomic_counter_t ();
 
             u.zclmsg.content->ffn (u.zclmsg.content->data,
                           u.zclmsg.content->hint);
@@ -308,10 +300,10 @@ int zmq::msg_t::copy (msg_t &src_)
         //  One reference is added to shared messages. Non-shared messages
         //  are turned into shared messages and reference count is set to 2.
         if (src_.u.lmsg.flags & msg_t::shared)
-            src_.u.lmsg.content->refcnt.add (1);
+            zmq::atomic_add (&src_.u.lmsg.content.refcnt, 1);
         else {
             src_.u.lmsg.flags |= msg_t::shared;
-            src_.u.lmsg.content->refcnt.set (2);
+            zmq::atomic_set (&src_.u.lmsg.content.refcnt, 2);
         }
     }
 
@@ -320,10 +312,10 @@ int zmq::msg_t::copy (msg_t &src_)
         //  One reference is added to shared messages. Non-shared messages
         //  are turned into shared messages and reference count is set to 2.
         if (src_.u.zclmsg.flags & msg_t::shared)
-            src_.refcnt()->add (1);
+            zmq::atomic_add (src_.refcnt(), 1);
         else {
             src_.u.zclmsg.flags |= msg_t::shared;
-            src_.refcnt()->set (2);
+            zmq::atomic_set (src_.refcnt(), 2);
         }
     }
     if (src_.u.base.metadata != NULL)
@@ -344,7 +336,7 @@ void *zmq::msg_t::data ()
     case type_vsm:
         return u.vsm.data;
     case type_lmsg:
-        return u.lmsg.content->data;
+        return u.lmsg.content.data;
     case type_cmsg:
         return u.cmsg.data;
     case type_zclmsg:
@@ -364,7 +356,7 @@ size_t zmq::msg_t::size ()
     case type_vsm:
         return u.vsm.size;
     case type_lmsg:
-        return u.lmsg.content->size;
+        return u.lmsg.content.size;
     case type_zclmsg:
         return u.zclmsg.content->size;
     case type_cmsg:
@@ -468,9 +460,9 @@ void zmq::msg_t::add_refs (int refs_)
     //  message type that needs special care are long messages.
     if (u.base.type == type_lmsg || is_zcmsg() ) {
         if (u.base.flags & msg_t::shared)
-            refcnt()->add (refs_);
+            zmq::atomic_add (refcnt(), refs_);
         else {
-            refcnt()->set (refs_ + 1);
+            zmq::atomic_set (refcnt(), refs_ + 1);
             u.base.flags |= msg_t::shared;
         }
     }
@@ -494,19 +486,21 @@ bool zmq::msg_t::rm_refs (int refs_)
     }
 
     //  The only message type that needs special care are long and zcopy messages.
-    if (u.base.type == type_lmsg && !u.lmsg.content->refcnt.sub(refs_)) {
+    if (u.base.type == type_lmsg &&
+            !zmq::atomic_sub (&u.lmsg.content.refcnt, refs_)) {
         //  We used "placement new" operator to initialize the reference
         //  counter so we call the destructor explicitly now.
-        u.lmsg.content->refcnt.~atomic_counter_t ();
+        //u.lmsg.content.refcnt.~inline_atomic_counter_t ();
 
-        if (u.lmsg.content->ffn)
-            u.lmsg.content->ffn (u.lmsg.content->data, u.lmsg.content->hint);
-        free (u.lmsg.content);
+        if (u.lmsg.content.ffn)
+            u.lmsg.content.ffn (u.lmsg.content.data, u.lmsg.content.hint);
+        else
+            free (u.lmsg.content.data);
 
         return false;
     }
 
-    if (is_zcmsg() && !u.zclmsg.content->refcnt.sub(refs_)) {
+    if (is_zcmsg() && !zmq::atomic_sub (&u.zclmsg.content->refcnt, refs_)) {
         // storage for rfcnt is provided externally
         if (u.zclmsg.content->ffn) {
             u.zclmsg.content->ffn(u.zclmsg.content->data, u.zclmsg.content->hint);
@@ -563,12 +557,12 @@ int zmq::msg_t::set_group (const char * group_, size_t length_)
     return 0;
 }
 
-zmq::atomic_counter_t *zmq::msg_t::refcnt()
+zmq::inline_atomic_counter_t *zmq::msg_t::refcnt()
 {
     switch(u.base.type)
     {
         case type_lmsg:
-            return &u.lmsg.content->refcnt;
+            return &u.lmsg.content.refcnt;
         case type_zclmsg:
             return &u.zclmsg.content->refcnt;
         default:
