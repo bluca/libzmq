@@ -67,136 +67,13 @@
 namespace zmq
 {
 
-    //  This class represents an integer that can be incremented/decremented
+    //  This struct represents an integer that can be incremented/decremented
     //  in atomic fashion.
 
-    class atomic_counter_t
+    typedef uint32_t integer_t;
+
+    typedef struct inline_atomic_counter_t
     {
-    public:
-
-        typedef uint32_t integer_t;
-
-        inline atomic_counter_t (integer_t value_ = 0) :
-            value (value_)
-        {
-        }
-
-        inline ~atomic_counter_t ()
-        {
-        }
-
-        //  Set counter value (not thread-safe).
-        inline void set (integer_t value_)
-        {
-            value = value_;
-        }
-
-        //  Atomic addition. Returns the old value.
-        inline integer_t add (integer_t increment_)
-        {
-            integer_t old_value;
-
-#if defined ZMQ_ATOMIC_COUNTER_WINDOWS
-            old_value = InterlockedExchangeAdd ((LONG*) &value, increment_);
-#elif defined ZMQ_ATOMIC_COUNTER_INTRINSIC
-            old_value = __atomic_fetch_add(&value, increment_, __ATOMIC_ACQ_REL);
-#elif defined ZMQ_ATOMIC_COUNTER_CXX11
-            old_value = value.fetch_add(increment_, std::memory_order_acq_rel);
-#elif defined ZMQ_ATOMIC_COUNTER_ATOMIC_H
-            integer_t new_value = atomic_add_32_nv (&value, increment_);
-            old_value = new_value - increment_;
-#elif defined ZMQ_ATOMIC_COUNTER_TILE
-            old_value = arch_atomic_add (&value, increment_);
-#elif defined ZMQ_ATOMIC_COUNTER_X86
-            __asm__ volatile (
-                "lock; xadd %0, %1 \n\t"
-                : "=r" (old_value), "=m" (value)
-                : "0" (increment_), "m" (value)
-                : "cc", "memory");
-#elif defined ZMQ_ATOMIC_COUNTER_ARM
-            integer_t flag, tmp;
-            __asm__ volatile (
-                "       dmb     sy\n\t"
-                "1:     ldrex   %0, [%5]\n\t"
-                "       add     %2, %0, %4\n\t"
-                "       strex   %1, %2, [%5]\n\t"
-                "       teq     %1, #0\n\t"
-                "       bne     1b\n\t"
-                "       dmb     sy\n\t"
-                : "=&r"(old_value), "=&r"(flag), "=&r"(tmp), "+Qo"(value)
-                : "Ir"(increment_), "r"(&value)
-                : "cc");
-#elif defined ZMQ_ATOMIC_COUNTER_MUTEX
-            sync.lock ();
-            old_value = value;
-            value += increment_;
-            sync.unlock ();
-#else
-#error atomic_counter is not implemented for this platform
-#endif
-            return old_value;
-        }
-
-        //  Atomic subtraction. Returns false if the counter drops to zero.
-        inline bool sub (integer_t decrement)
-        {
-#if defined ZMQ_ATOMIC_COUNTER_WINDOWS
-            LONG delta = - ((LONG) decrement);
-            integer_t old = InterlockedExchangeAdd ((LONG*) &value, delta);
-            return old - decrement != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_INTRINSIC
-            integer_t nv = __atomic_sub_fetch(&value, decrement, __ATOMIC_ACQ_REL);
-            return nv != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_CXX11
-            integer_t old = value.fetch_sub(decrement, std::memory_order_acq_rel);
-            return old - decrement != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_ATOMIC_H
-            int32_t delta = - ((int32_t) decrement);
-            integer_t nv = atomic_add_32_nv (&value, delta);
-            return nv != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_TILE
-            int32_t delta = - ((int32_t) decrement);
-            integer_t nv = arch_atomic_add (&value, delta);
-            return nv != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_X86
-            integer_t oldval = -decrement;
-            volatile integer_t *val = &value;
-            __asm__ volatile ("lock; xaddl %0,%1"
-                : "=r" (oldval), "=m" (*val)
-                : "0" (oldval), "m" (*val)
-                : "cc", "memory");
-            return oldval != decrement;
-#elif defined ZMQ_ATOMIC_COUNTER_ARM
-            integer_t old_value, flag, tmp;
-            __asm__ volatile (
-                "       dmb     sy\n\t"
-                "1:     ldrex   %0, [%5]\n\t"
-                "       sub     %2, %0, %4\n\t"
-                "       strex   %1, %2, [%5]\n\t"
-                "       teq     %1, #0\n\t"
-                "       bne     1b\n\t"
-                "       dmb     sy\n\t"
-                : "=&r"(old_value), "=&r"(flag), "=&r"(tmp), "+Qo"(value)
-                : "Ir"(decrement), "r"(&value)
-                : "cc");
-            return old_value - decrement != 0;
-#elif defined ZMQ_ATOMIC_COUNTER_MUTEX
-            sync.lock ();
-            value -= decrement;
-            bool result = value ? true : false;
-            sync.unlock ();
-            return result;
-#else
-#error atomic_counter is not implemented for this platform
-#endif
-        }
-
-        inline integer_t get () const
-        {
-            return value;
-        }
-
-    private:
 
 #if defined ZMQ_ATOMIC_COUNTER_CXX11
         std::atomic<integer_t> value;
@@ -207,6 +84,166 @@ namespace zmq
 #if defined ZMQ_ATOMIC_COUNTER_MUTEX
         mutex_t sync;
 #endif
+    } inline_atomic_counter_t;
+
+    //  Set counter value (not thread-safe).
+    inline void atomic_set (inline_atomic_counter_t *counter, integer_t value_)
+    {
+        counter->value = value_;
+    }
+
+    //  Atomic addition. Returns the old value.
+    inline integer_t atomic_add (inline_atomic_counter_t *counter,
+            integer_t increment_)
+    {
+        integer_t old_value;
+
+#if defined ZMQ_ATOMIC_COUNTER_WINDOWS
+        old_value = InterlockedExchangeAdd ((LONG*) &counter->value, increment_);
+#elif defined ZMQ_ATOMIC_COUNTER_INTRINSIC
+        old_value = __atomic_fetch_add(&counter->value, increment_,
+                __ATOMIC_ACQ_REL);
+#elif defined ZMQ_ATOMIC_COUNTER_CXX11
+        old_value = counter->value.fetch_add(increment_,
+                std::memory_order_acq_rel);
+#elif defined ZMQ_ATOMIC_COUNTER_ATOMIC_H
+        integer_t new_value = atomic_add_32_nv (&counter->value, increment_);
+        old_value = new_value - increment_;
+#elif defined ZMQ_ATOMIC_COUNTER_TILE
+        old_value = arch_atomic_add (&counter->value, increment_);
+#elif defined ZMQ_ATOMIC_COUNTER_X86
+        __asm__ volatile (
+            "lock; xadd %0, %1 \n\t"
+            : "=r" (old_value), "=m" (counter->value)
+            : "0" (increment_), "m" (counter->value)
+            : "cc", "memory");
+#elif defined ZMQ_ATOMIC_COUNTER_ARM
+        integer_t flag, tmp;
+        __asm__ volatile (
+            "       dmb     sy\n\t"
+            "1:     ldrex   %0, [%5]\n\t"
+            "       add     %2, %0, %4\n\t"
+            "       strex   %1, %2, [%5]\n\t"
+            "       teq     %1, #0\n\t"
+            "       bne     1b\n\t"
+            "       dmb     sy\n\t"
+            : "=&r"(old_value), "=&r"(flag), "=&r"(tmp), "+Qo"(counter->value)
+            : "Ir"(increment_), "r"(&counter->value)
+            : "cc");
+#elif defined ZMQ_ATOMIC_COUNTER_MUTEX
+        sync.lock ();
+        old_value = counter->value;
+        counter->value += increment_;
+        sync.unlock ();
+#else
+#error atomic_counter is not implemented for this platform
+#endif
+        return old_value;
+    }
+
+    //  Atomic subtraction. Returns false if the counter drops to zero.
+    inline bool atomic_sub (inline_atomic_counter_t *counter, integer_t decrement)
+    {
+#if defined ZMQ_ATOMIC_COUNTER_WINDOWS
+        LONG delta = - ((LONG) decrement);
+        integer_t old = InterlockedExchangeAdd ((LONG*) &counter->value, delta);
+        return old - decrement != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_INTRINSIC
+        integer_t nv = __atomic_sub_fetch(&counter->value, decrement,
+                __ATOMIC_ACQ_REL);
+        return nv != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_CXX11
+        integer_t old = counter->value.fetch_sub(decrement,
+                std::memory_order_acq_rel);
+        return old - decrement != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_ATOMIC_H
+        int32_t delta = - ((int32_t) decrement);
+        integer_t nv = atomic_add_32_nv (&counter->value, delta);
+        return nv != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_TILE
+        int32_t delta = - ((int32_t) decrement);
+        integer_t nv = arch_atomic_add (&counter->value, delta);
+        return nv != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_X86
+        integer_t oldval = -decrement;
+        volatile integer_t *val = &counter->value;
+        __asm__ volatile ("lock; xaddl %0,%1"
+            : "=r" (oldval), "=m" (*val)
+            : "0" (oldval), "m" (*val)
+            : "cc", "memory");
+        return oldval != decrement;
+#elif defined ZMQ_ATOMIC_COUNTER_ARM
+        integer_t old_value, flag, tmp;
+        __asm__ volatile (
+            "       dmb     sy\n\t"
+            "1:     ldrex   %0, [%5]\n\t"
+            "       sub     %2, %0, %4\n\t"
+            "       strex   %1, %2, [%5]\n\t"
+            "       teq     %1, #0\n\t"
+            "       bne     1b\n\t"
+            "       dmb     sy\n\t"
+            : "=&r"(old_value), "=&r"(flag), "=&r"(tmp), "+Qo"(value)
+            : "Ir"(decrement), "r"(&counter->value)
+            : "cc");
+        return old_value - decrement != 0;
+#elif defined ZMQ_ATOMIC_COUNTER_MUTEX
+        sync.lock ();
+        counter->value -= decrement;
+        bool result = counter->value ? true : false;
+        sync.unlock ();
+        return result;
+#else
+#error atomic_counter is not implemented for this platform
+#endif
+    }
+
+    inline integer_t atomic_get (inline_atomic_counter_t *counter)
+    {
+        return counter->value;
+    }
+
+    //  This class represents an integer that can be incremented/decremented
+    //  in atomic fashion.
+
+    class atomic_counter_t
+    {
+    public:
+
+        inline atomic_counter_t (integer_t value_ = 0)
+        {
+            atomic_set (&value, value_);
+        }
+
+        inline ~atomic_counter_t ()
+        {
+        }
+
+        //  Set counter value (not thread-safe).
+        inline void set (integer_t value_)
+        {
+            atomic_set (&value, value_);
+        }
+
+        //  Atomic addition. Returns the old value.
+        inline integer_t add (integer_t increment_)
+        {
+            return atomic_add (&value, increment_);
+        }
+
+        //  Atomic subtraction. Returns false if the counter drops to zero.
+        inline bool sub (integer_t decrement)
+        {
+            return atomic_sub (&value, decrement);
+        }
+
+        inline integer_t get ()
+        {
+            return atomic_get (&value);
+        }
+
+    private:
+
+        inline_atomic_counter_t value;
 
 #if ! defined ZMQ_ATOMIC_COUNTER_CXX11
         atomic_counter_t (const atomic_counter_t&);
