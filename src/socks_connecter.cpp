@@ -129,7 +129,8 @@ void zmq::socks_connecter_t::in_event ()
                      error ();
                  else {
                      request_encoder.encode (
-                         socks_request_t (1, hostname, port));
+                         socks_request_t (1, hostname, port,
+                                 proxy_addr->resolved.tcp_addr));
                      reset_pollin (handle);
                      set_pollout (handle);
                      status = sending_request;

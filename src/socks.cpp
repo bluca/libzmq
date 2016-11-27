@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <resolv.h>
 #endif
 
 zmq::socks_greeting_t::socks_greeting_t (uint8_t method_) :
@@ -128,8 +129,10 @@ void zmq::socks_choice_decoder_t::reset ()
 
 
 zmq::socks_request_t::socks_request_t (
-        uint8_t command_, std::string hostname_, uint16_t port_)
-    : command (command_), hostname (hostname_), port (port_)
+        uint8_t command_, std::string hostname_, uint16_t port_,
+        tcp_address_t *proxy_address_)
+    : command (command_), hostname (hostname_), port (port_),
+      proxy_address (proxy_address_)
 {
     zmq_assert (hostname_.size () <= UINT8_MAX);
 }
@@ -153,10 +156,24 @@ void zmq::socks_request_encoder_t::encode (const socks_request_t &req)
     addrinfo hints, *res = NULL;
 #endif
 
-    memset (&hints, 0, sizeof hints);
+    if (req.proxy_address) {
+        if (req.proxy_address->addr ()->sa_family == AF_INET) {
+            _res.nsaddr_list[0] = *(struct sockaddr_in *) req.proxy_address->addr ();
+            _res.nscount = 1;
+        }
+        else
+        if (req.proxy_address->addr ()->sa_family == AF_INET6) {
+            _res._u._ext.nsaddrs[0] = (struct sockaddr_in6 *) req.proxy_address->addr ();
+            _res._u._ext.nscount6 = 1;
+        }
+    }
+    else {
+        //  Suppress potential DNS lookups if the request cannot be sent through
+        //  the proxy.
+        hints.ai_flags = AI_NUMERICHOST;
+    }
 
-    //  Suppress potential DNS lookups.
-    hints.ai_flags = AI_NUMERICHOST;
+    memset (&hints, 0, sizeof hints);
 
     const int rc = getaddrinfo (req.hostname.c_str (), NULL, &hints, &res);
     if (rc == 0 && res->ai_family == AF_INET) {
@@ -180,6 +197,9 @@ void zmq::socks_request_encoder_t::encode (const socks_request_t &req)
         memcpy (ptr, req.hostname.c_str (), req.hostname.size ());
         ptr += req.hostname.size ();
     }
+
+    if (req.proxy_address)
+        res_init();
 
     if (rc == 0)
         freeaddrinfo (res);

@@ -33,6 +33,7 @@
 #include <string>
 #include "fd.hpp"
 #include "stdint.hpp"
+#include "tcp_address.hpp"
 
 namespace zmq
 {
@@ -85,11 +86,13 @@ namespace zmq
     struct socks_request_t
     {
         socks_request_t (
-            uint8_t command_, std::string hostname_, uint16_t port_);
+            uint8_t command_, std::string hostname_, uint16_t port_,
+            tcp_address_t *proxy_address_);
 
         const uint8_t command;
         const std::string hostname;
         const uint16_t port;
+        const tcp_address_t *proxy_address; //  For DNS resolution
     };
 
     class socks_request_encoder_t
