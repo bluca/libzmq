@@ -480,6 +480,7 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
 #endif
 
     if (rc) {
+        freeaddrinfo (res);
         errno = ENODEV;
         return -1;
     }
@@ -527,9 +528,9 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
     //  Resolve host name. Some of the error info is lost in case of error,
     //  however, there's no way to report EAI errors via errno.
 #if defined ZMQ_HAVE_OPENVMS && defined __ia64 && __INITIAL_POINTER_SIZE == 64
-    __addrinfo64 *res;
+    __addrinfo64 *res = NULL;
 #else
-    addrinfo *res;
+    addrinfo *res = NULL;
 #endif
     int rc = getaddrinfo (hostname_, NULL, &req, &res);
 
@@ -543,6 +544,7 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
 #endif
 
     if (rc) {
+        freeaddrinfo (res);
         switch (rc) {
         case EAI_MEMORY:
             errno = ENOMEM;
