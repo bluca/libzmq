@@ -91,10 +91,27 @@ int zmq::tcp_address_t::resolve_nic_name (const char *nic_, bool ipv6_, bool is_
             rc = ioctl (fd, SIOCGLIFADDR, (char*) ifrp);
             errno_assert (rc != -1);
             if (ifrp->lifr_addr.ss_family == AF_INET) {
-                if (is_src_)
-                    source_address.ipv4 = *(sockaddr_in*) &ifrp->lifr_addr;
-                else
-                    address.ipv4 = *(sockaddr_in*) &ifrp->lifr_addr;
+                if (is_src_) {
+                    if (source_addresses)
+                        freeaddrinfo (source_addresses);
+                    source_addresses = (addrinfo *) calloc (1, sizeof (addrinfo) +
+                            sizeof (sockaddr_in));
+                    zmq_assert (source_addresses);
+                    source_addresses->ai_addr = (struct sockaddr *)(source_addresses +
+                            1);
+                    source_addresses->ai_addrlen = (socklen_t) sizeof (sockaddr_in);
+                    source_addresses->ai_family = ifrp->lifr_addr.ss_family;
+                    *((sockaddr_in *)source_addresses.ai_addr) = *(sockaddr_in*) &ifrp->lifr_addr;
+                } else {
+                    if (addresses)
+                        freeaddrinfo (addresses);
+                    addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + sizeof (sockaddr_in));
+                    zmq_assert (addresses);
+                    addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+                    addresses->ai_addrlen = (socklen_t) sizeof (sockaddr_in);
+                    addresses->ai_family = ifrp->lifr_addr.ss_family;
+                    *((sockaddr_in *)addresses.ai_addr) = *(sockaddr_in*) &ifrp->lifr_addr;
+                }
                 found = true;
                 break;
             }
@@ -150,14 +167,27 @@ int zmq::tcp_address_t::resolve_nic_name (const char *nic_, bool ipv6_, bool is_
     if (family == (ipv6_ ? AF_INET6 : AF_INET)
         && !strcmp (nic_, ifr.ifr_name))
     {
-        if (is_src_)
-            memcpy (&source_address, &ifr.ifr_addr,
-                    (family == AF_INET) ? sizeof (struct sockaddr_in)
-                                        : sizeof (struct sockaddr_in6));
-        else
-            memcpy (&address, &ifr.ifr_addr,
-                    (family == AF_INET) ? sizeof (struct sockaddr_in)
-                                        : sizeof (struct sockaddr_in6));
+        size_t len = (family == AF_INET) ? sizeof (struct sockaddr_in)
+                : sizeof (struct sockaddr_in6);
+        if (is_src_) {
+            if (source_addresses)
+                freeaddrinfo (source_addresses);
+            source_addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+            zmq_assert (source_addresses);
+            source_addresses->ai_addr = (struct sockaddr *)(source_addresses + 1);
+            source_addresses->ai_addrlen = (socklen_t) len;
+            source_addresses->ai_family = family;
+            memcpy (source_addresses->ai_addr, &ifr.ifr_addr, len);
+        } else {
+            if (addresses)
+                freeaddrinfo (addresses);
+            addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+            zmq_assert (addresses);
+            addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+            addresses->ai_addrlen = (socklen_t) len;
+            addresses->ai_family = family;
+            memcpy (addresses->ai_addr, &ifr.ifr_addr, len);
+        }
     }
     else
     {
@@ -212,14 +242,27 @@ int zmq::tcp_address_t::resolve_nic_name (const char *nic_, bool ipv6_, bool is_
         const int family = ifp->ifa_addr->sa_family;
         if (family == (ipv6_ ? AF_INET6 : AF_INET)
         && !strcmp (nic_, ifp->ifa_name)) {
-            if (is_src_)
-                memcpy (&source_address, ifp->ifa_addr,
-                        (family == AF_INET) ? sizeof (struct sockaddr_in)
-                                            : sizeof (struct sockaddr_in6));
-            else
-                memcpy (&address, ifp->ifa_addr,
-                        (family == AF_INET) ? sizeof (struct sockaddr_in)
-                                            : sizeof (struct sockaddr_in6));
+            size_t len = (family == AF_INET) ? sizeof (struct sockaddr_in)
+                    : sizeof (struct sockaddr_in6);
+            if (is_src_) {
+                if (source_addresses)
+                    freeaddrinfo (source_addresses);
+                source_addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+                zmq_assert (source_addresses);
+                source_addresses->ai_addr = (struct sockaddr *)(source_addresses + 1);
+                source_addresses->ai_addrlen = (socklen_t) len;
+                source_addresses->ai_family = family;
+                memcpy (source_addresses->ai_addr, ifp->ifa_addr, len);
+            } else {
+                if (addresses)
+                    freeaddrinfo (addresses);
+                addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+                zmq_assert (addresses);
+                addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+                addresses->ai_addrlen = (socklen_t) len;
+                addresses->ai_family = family;
+                memcpy (addresses->ai_addr, ifp->ifa_addr, len);
+            }
             found = true;
             break;
         }
@@ -293,21 +336,21 @@ int zmq::tcp_address_t::resolve_nic_name(const char *nic_, bool ipv6_, bool is_s
     const int max_attempts = 10;
 
     int iterations = 0;
-    IP_ADAPTER_ADDRESSES * addresses = NULL;
+    IP_ADAPTER_ADDRESSES * addrs = NULL;
     IP_ADAPTER_ADDRESSES * current_addresses = NULL;
     unsigned long out_buf_len = sizeof(IP_ADAPTER_ADDRESSES);
 
     do {
-        addresses = (IP_ADAPTER_ADDRESSES *) malloc(out_buf_len);
-        alloc_assert(addresses);
+        addrs = (IP_ADAPTER_ADDRESSES *) malloc(out_buf_len);
+        alloc_assert(addrs);
 
         rc = GetAdaptersAddresses(AF_UNSPEC,
                                   GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
                                   NULL,
-                                  addresses, &out_buf_len);
+                                  addrs, &out_buf_len);
         if (rc == ERROR_BUFFER_OVERFLOW) {
-            free(addresses);
-            addresses = NULL;
+            free(addrs);
+            addrs = NULL;
         }
         else {
             break;
@@ -316,7 +359,7 @@ int zmq::tcp_address_t::resolve_nic_name(const char *nic_, bool ipv6_, bool is_s
     } while ((rc == ERROR_BUFFER_OVERFLOW) && (iterations < max_attempts));
 
     if (rc == 0) {
-        current_addresses = addresses;
+        current_addresses = addrs;
         while (current_addresses) {
             char * if_name = NULL;
             char * if_friendly_name = NULL;
@@ -339,14 +382,29 @@ int zmq::tcp_address_t::resolve_nic_name(const char *nic_, bool ipv6_, bool is_s
                     ADDRESS_FAMILY family = current_unicast_address->Address.lpSockaddr->sa_family;
 
                     if (family == (ipv6_ ? AF_INET6 : AF_INET)) {
-                        if (is_src_)
-                            memcpy(&source_address, current_unicast_address->Address.lpSockaddr,
-                                   (family == AF_INET) ? sizeof(struct sockaddr_in)
-                                   : sizeof(struct sockaddr_in6));
-                        else
-                            memcpy(&address, current_unicast_address->Address.lpSockaddr,
-                                   (family == AF_INET) ? sizeof(struct sockaddr_in)
-                                   : sizeof(struct sockaddr_in6));
+                        size_t len = (family == AF_INET) ? sizeof (struct sockaddr_in)
+                                : sizeof (struct sockaddr_in6);
+                        if (is_src_) {
+                            if (source_addresses)
+                                freeaddrinfo (source_addresses);
+                            source_addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+                            zmq_assert (source_addresses);
+                            source_addresses->ai_addr = (struct sockaddr *)(source_addresses + 1);
+                            source_addresses->ai_addrlen = (socklen_t) len;
+                            source_addresses->ai_family = family;
+                            memcpy (source_addresses->ai_addr,
+                                    current_unicast_address->Address.lpSockaddr, len);
+                        } else {
+                            if (addresses)
+                                freeaddrinfo (addresses);
+                            addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + len);
+                            zmq_assert (addresses);
+                            addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+                            addresses->ai_addrlen = (socklen_t) len;
+                            addresses->ai_family = family;
+                            memcpy (addresses->ai_addr,
+                                    current_unicast_address->Address.lpSockaddr, len);
+                        }
                         found = true;
                         break;
                     }
@@ -363,7 +421,7 @@ int zmq::tcp_address_t::resolve_nic_name(const char *nic_, bool ipv6_, bool is_s
             current_addresses = current_addresses->Next;
         }
 
-        free(addresses);
+        free(addrs);
     }
 
     if (!found) {
@@ -414,11 +472,28 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
     }
     //  "*" resolves to INADDR_ANY or in6addr_any.
     if (strcmp (interface_, "*") == 0) {
-        zmq_assert (out_addrlen <= sizeof (address) );
-        if (is_src_)
-            memcpy (&source_address, out_addr, out_addrlen);
-        else
-            memcpy (&address, out_addr, out_addrlen);
+        zmq_assert (out_addrlen <= sizeof (addrinfo) );
+        if (is_src_) {
+            if (source_addresses)
+                freeaddrinfo (source_addresses);
+            source_addresses = (addrinfo *) calloc (1, sizeof (addrinfo) +
+                    out_addrlen);
+            zmq_assert (source_addresses);
+            source_addresses->ai_addr = (struct sockaddr *)(source_addresses +
+                    1);
+            source_addresses->ai_addrlen = (socklen_t) out_addrlen;
+            source_addresses->ai_family = ipv6_ ? AF_INET6 : AF_INET;
+            memcpy (source_addresses->ai_addr, out_addr, out_addrlen);
+        } else {
+            if (addresses)
+                freeaddrinfo (addresses);
+            addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + out_addrlen);
+            zmq_assert (addresses);
+            addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+            addresses->ai_addrlen = (socklen_t) out_addrlen;
+            addresses->ai_family = ipv6_ ? AF_INET6 : AF_INET;
+            memcpy (addresses->ai_addr, out_addr, out_addrlen);
+        }
         return 0;
     }
 
@@ -428,13 +503,8 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
         return rc;
 
     //  There's no such interface name. Assume literal address.
-#if defined ZMQ_HAVE_OPENVMS && defined __ia64
-    __addrinfo64 *res = NULL;
-    __addrinfo64 req;
-#else
     addrinfo *res = NULL;
     addrinfo req;
-#endif
     memset (&req, 0, sizeof (req) );
 
     //  Choose IPv4 or IPv6 protocol family. Note that IPv6 allows for
@@ -480,20 +550,22 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
 #endif
 
     if (rc) {
+        freeaddrinfo (res);
         errno = ENODEV;
         return -1;
     }
 
     //  Use the first result.
     zmq_assert (res != NULL);
-    zmq_assert ((size_t) res->ai_addrlen <= sizeof (address) );
-    if (is_src_)
-        memcpy (&source_address, res->ai_addr, res->ai_addrlen);
-    else
-        memcpy (&address, res->ai_addr, res->ai_addrlen);
-
-    //  Cleanup getaddrinfo after copying the possibly referenced result.
-    freeaddrinfo (res);
+    if (is_src_) {
+        if (source_addresses)
+            freeaddrinfo (source_addresses);
+        source_addresses = res;
+    } else {
+        if (addresses)
+            freeaddrinfo (addresses);
+        addresses = res;
+    }
 
     return 0;
 }
@@ -501,11 +573,7 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
 int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, bool is_src_)
 {
     //  Set up the query.
-#if defined ZMQ_HAVE_OPENVMS && defined __ia64 && __INITIAL_POINTER_SIZE == 64
-    __addrinfo64 req;
-#else
     addrinfo req;
-#endif
     memset (&req, 0, sizeof (req) );
 
     //  Choose IPv4 or IPv6 protocol family. Note that IPv6 allows for
@@ -526,11 +594,7 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
 
     //  Resolve host name. Some of the error info is lost in case of error,
     //  however, there's no way to report EAI errors via errno.
-#if defined ZMQ_HAVE_OPENVMS && defined __ia64 && __INITIAL_POINTER_SIZE == 64
-    __addrinfo64 *res;
-#else
-    addrinfo *res;
-#endif
+    addrinfo *res = NULL;
     int rc = getaddrinfo (hostname_, NULL, &req, &res);
 
 #if defined AI_V4MAPPED
@@ -543,6 +607,7 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
 #endif
 
     if (rc) {
+        freeaddrinfo (res);
         switch (rc) {
         case EAI_MEMORY:
             errno = ENOMEM;
@@ -555,40 +620,52 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
     }
 
     //  Copy first result to output addr with hostname and service.
-    zmq_assert ((size_t) res->ai_addrlen <= sizeof (address) );
-    if (is_src_)
-        memcpy (&source_address, res->ai_addr, res->ai_addrlen);
-    else
-        memcpy (&address, res->ai_addr, res->ai_addrlen);
-
-    freeaddrinfo (res);
+    if (is_src_) {
+        if (source_addresses)
+            freeaddrinfo (source_addresses);
+        source_addresses = res;
+    } else {
+        if (addresses)
+            freeaddrinfo (addresses);
+        addresses = res;
+    }
 
     return 0;
 }
 
 zmq::tcp_address_t::tcp_address_t () :
+    addresses (NULL),
+    source_addresses (NULL),
     _has_src_addr (false)
 {
-    memset (&address, 0, sizeof (address) );
-    memset (&source_address, 0, sizeof (source_address) );
 }
 
 zmq::tcp_address_t::tcp_address_t (const sockaddr *sa, socklen_t sa_len) :
+    addresses (NULL),
+    source_addresses (NULL),
     _has_src_addr (false)
 {
     zmq_assert (sa && sa_len > 0);
+    if (sa->sa_family == AF_INET)
+        zmq_assert (sa_len >= (socklen_t) sizeof (sockaddr_in));
+    else if (sa->sa_family == AF_INET6)
+        zmq_assert (sa_len >= (socklen_t) sizeof (sockaddr_in6));
 
-    memset (&address, 0, sizeof (address) );
-    memset (&source_address, 0, sizeof (source_address) );
-    if (sa->sa_family == AF_INET && sa_len >= (socklen_t) sizeof (address.ipv4) )
-        memcpy (&address.ipv4, sa, sizeof (address.ipv4) );
-    else
-    if (sa->sa_family == AF_INET6 && sa_len >= (socklen_t) sizeof (address.ipv6) )
-        memcpy (&address.ipv6, sa, sizeof (address.ipv6) );
+    addresses = (addrinfo *) calloc (1, sizeof (addrinfo) + sa_len);
+    zmq_assert (addresses);
+    addresses->ai_addr = (struct sockaddr *)(addresses + 1);
+    addresses->ai_addrlen = (socklen_t) sa_len;
+    addresses->ai_family = sa->sa_family;
+
+    memcpy (addresses->ai_addr, sa, sa_len);
 }
 
 zmq::tcp_address_t::~tcp_address_t ()
 {
+    if (addresses)
+        freeaddrinfo (addresses);
+    if (source_addresses)
+        freeaddrinfo (source_addresses);
 }
 
 int zmq::tcp_address_t::resolve (const char *name_, bool local_, bool ipv6_, bool is_src_)
@@ -673,30 +750,25 @@ int zmq::tcp_address_t::resolve (const char *name_, bool local_, bool ipv6_, boo
         return -1;
 
     //  Set the port into the address structure.
-    if (is_src_) {
-        if (source_address.generic.sa_family == AF_INET6) {
-            source_address.ipv6.sin6_port = htons (port);
-            source_address.ipv6.sin6_scope_id = zone_id;
+    addrinfo *addr = is_src_ ? source_addresses : addresses;
+    while (addr) {
+        if (addr->ai_family == AF_INET6) {
+            ((sockaddr_in6 *)addr->ai_addr)->sin6_port = htons (port);
+            ((sockaddr_in6 *)addr->ai_addr)->sin6_scope_id = zone_id;
+        } else {
+            ((sockaddr_in *)addr->ai_addr)->sin_port = htons (port);
         }
-        else
-            source_address.ipv4.sin_port = htons (port);
+        addr = addr->ai_next;
     }
-    else {
-        if (address.generic.sa_family == AF_INET6) {
-            address.ipv6.sin6_port = htons (port);
-            address.ipv6.sin6_scope_id = zone_id;
-        }
-        else
-            address.ipv4.sin_port = htons (port);
-    }
+
 
     return 0;
 }
 
 int zmq::tcp_address_t::to_string (std::string &addr_)
 {
-    if (address.generic.sa_family != AF_INET
-    &&  address.generic.sa_family != AF_INET6) {
+    if (!addresses || (addresses->ai_family != AF_INET
+    &&  addresses->ai_family != AF_INET6)) {
         addr_.clear ();
         return -1;
     }
@@ -710,14 +782,14 @@ int zmq::tcp_address_t::to_string (std::string &addr_)
         return rc;
     }
 
-    if (address.generic.sa_family == AF_INET6) {
+    if (addresses->ai_family == AF_INET6) {
         std::stringstream s;
-        s << "tcp://[" << hbuf << "]:" << ntohs (address.ipv6.sin6_port);
+        s << "tcp://[" << hbuf << "]:" << ntohs (((sockaddr_in6 *)addresses->ai_addr)->sin6_port);
         addr_ = s.str ();
     }
     else {
         std::stringstream s;
-        s << "tcp://" << hbuf << ":" << ntohs (address.ipv4.sin_port);
+        s << "tcp://" << hbuf << ":" << ntohs (((sockaddr_in *)addresses->ai_addr)->sin_port);
         addr_ = s.str ();
     }
     return 0;
@@ -725,28 +797,22 @@ int zmq::tcp_address_t::to_string (std::string &addr_)
 
 const sockaddr *zmq::tcp_address_t::addr () const
 {
-    return &address.generic;
+    return addresses ? addresses->ai_addr : NULL;
 }
 
 socklen_t zmq::tcp_address_t::addrlen () const
 {
-    if (address.generic.sa_family == AF_INET6)
-        return (socklen_t) sizeof (address.ipv6);
-    else
-        return (socklen_t) sizeof (address.ipv4);
+    return addresses ? addresses->ai_addrlen : 0;
 }
 
 const sockaddr *zmq::tcp_address_t::src_addr () const
 {
-    return &source_address.generic;
+    return source_addresses ? source_addresses->ai_addr : NULL;
 }
 
 socklen_t zmq::tcp_address_t::src_addrlen () const
 {
-    if (address.generic.sa_family == AF_INET6)
-        return (socklen_t) sizeof (source_address.ipv6);
-    else
-        return (socklen_t) sizeof (source_address.ipv4);
+    return source_addresses ? source_addresses->ai_addrlen : 0;
 }
 
 bool zmq::tcp_address_t::has_src_addr () const
@@ -760,7 +826,7 @@ unsigned short zmq::tcp_address_t::family () const
 sa_family_t zmq::tcp_address_t::family () const
 #endif
 {
-    return address.generic.sa_family;
+    return addresses ? addresses->ai_family : 0;
 }
 
 zmq::tcp_address_mask_t::tcp_address_mask_t () :
@@ -799,7 +865,7 @@ int zmq::tcp_address_mask_t::resolve (const char *name_, bool ipv6_)
 
     // Parse the cidr mask number.
     if (mask_str.empty ()) {
-        if (address.generic.sa_family == AF_INET6)
+        if (addresses->ai_family == AF_INET6)
             address_mask = 128;
         else
             address_mask = 32;
@@ -811,8 +877,8 @@ int zmq::tcp_address_mask_t::resolve (const char *name_, bool ipv6_)
         const int mask = atoi (mask_str.c_str ());
         if (
             (mask < 1) ||
-            (address.generic.sa_family == AF_INET6 && mask > 128) ||
-            (address.generic.sa_family != AF_INET6 && mask > 32)
+            (addresses->ai_family == AF_INET6 && mask > 128) ||
+            (addresses->ai_family != AF_INET6 && mask > 32)
         ) {
             errno = EINVAL;
             return -1;
@@ -825,8 +891,8 @@ int zmq::tcp_address_mask_t::resolve (const char *name_, bool ipv6_)
 
 int zmq::tcp_address_mask_t::to_string (std::string &addr_)
 {
-    if (address.generic.sa_family != AF_INET
-    &&  address.generic.sa_family != AF_INET6) {
+    if (addresses->ai_family != AF_INET
+    &&  addresses->ai_family != AF_INET6) {
         addr_.clear ();
         return -1;
     }
@@ -842,7 +908,7 @@ int zmq::tcp_address_mask_t::to_string (std::string &addr_)
         return rc;
     }
 
-    if (address.generic.sa_family == AF_INET6) {
+    if (addresses->ai_family == AF_INET6) {
         std::stringstream s;
         s << "[" << hbuf << "]/" << address_mask;
         addr_ = s.str ();
@@ -861,7 +927,7 @@ bool zmq::tcp_address_mask_t::match_address (const struct sockaddr *ss, const so
              && ss != NULL
              && ss_len >= (socklen_t) sizeof (struct sockaddr));
 
-    if (ss->sa_family != address.generic.sa_family)
+    if (ss->sa_family != addresses->ai_family)
         return false;
 
     if (address_mask > 0) {
@@ -870,13 +936,13 @@ bool zmq::tcp_address_mask_t::match_address (const struct sockaddr *ss, const so
         if (ss->sa_family == AF_INET6) {
             zmq_assert (ss_len == sizeof (struct sockaddr_in6));
             their_bytes = (const uint8_t *) &(((const struct sockaddr_in6 *) ss)->sin6_addr);
-            our_bytes = (const uint8_t *) &address.ipv6.sin6_addr;
+            our_bytes = (const uint8_t *) &(((const struct sockaddr_in6 *)addresses->ai_addr)->sin6_addr);
             mask = sizeof (struct in6_addr) * 8;
         }
         else {
             zmq_assert (ss_len == sizeof (struct sockaddr_in));
             their_bytes = (const uint8_t *) &(((const struct sockaddr_in *) ss)->sin_addr);
-            our_bytes = (const uint8_t *) &address.ipv4.sin_addr;
+            our_bytes = (const uint8_t *) &(((const struct sockaddr_in *)addresses->ai_addr)->sin_addr);
             mask = sizeof (struct in_addr) * 8;
         }
         if (address_mask < mask)

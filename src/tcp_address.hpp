@@ -33,6 +33,7 @@
 #if !defined ZMQ_HAVE_WINDOWS
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #endif
 
 namespace zmq
@@ -77,17 +78,12 @@ namespace zmq
 		int wchar_to_utf8(const WCHAR * src, char ** dest) const;
 #endif
 
-        union {
-            sockaddr generic;
-            sockaddr_in ipv4;
-            sockaddr_in6 ipv6;
-        } address;
+#if defined ZMQ_HAVE_OPENVMS && defined __ia64 && __INITIAL_POINTER_SIZE == 64
+#define __addrinfo64 addrinfo;
+#endif
+        addrinfo *addresses;
+        addrinfo *source_addresses;
 
-        union {
-            sockaddr generic;
-            sockaddr_in ipv4;
-            sockaddr_in6 ipv6;
-        } source_address;
         bool _has_src_addr;
     };
 
