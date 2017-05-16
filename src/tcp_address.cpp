@@ -417,8 +417,10 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
         zmq_assert (out_addrlen <= sizeof (address) );
         if (is_src_)
             memcpy (&source_address, out_addr, out_addrlen);
-        else
+        else {
             memcpy (&address, out_addr, out_addrlen);
+            addresses.push_back (address);
+        }
         return 0;
     }
 
@@ -490,8 +492,10 @@ int zmq::tcp_address_t::resolve_interface (const char *interface_, bool ipv6_, b
     zmq_assert ((size_t) res->ai_addrlen <= sizeof (address) );
     if (is_src_)
         memcpy (&source_address, res->ai_addr, res->ai_addrlen);
-    else
+    else {
         memcpy (&address, res->ai_addr, res->ai_addrlen);
+        addresses.push_back (address);
+    }
 
     //  Cleanup getaddrinfo after copying the possibly referenced result.
     freeaddrinfo (res);
@@ -560,8 +564,15 @@ int zmq::tcp_address_t::resolve_hostname (const char *hostname_, bool ipv6_, boo
     zmq_assert ((size_t) res->ai_addrlen <= sizeof (address) );
     if (is_src_)
         memcpy (&source_address, res->ai_addr, res->ai_addrlen);
-    else
+    else {
         memcpy (&address, res->ai_addr, res->ai_addrlen);
+        while (res) {
+            address_t addr;
+            memcpy (&addr, res->ai_addr, res->ai_addrlen);
+            addresses.push_back (addr);
+            res = res->ai_next;
+        }
+    }
 
     freeaddrinfo (res);
 
@@ -587,6 +598,7 @@ zmq::tcp_address_t::tcp_address_t (const sockaddr *sa, socklen_t sa_len) :
     else
     if (sa->sa_family == AF_INET6 && sa_len >= (socklen_t) sizeof (address.ipv6) )
         memcpy (&address.ipv6, sa, sizeof (address.ipv6) );
+    addresses.push_back (address);
 }
 
 zmq::tcp_address_t::~tcp_address_t ()
@@ -687,9 +699,19 @@ int zmq::tcp_address_t::resolve (const char *name_, bool local_, bool ipv6_, boo
         if (address.generic.sa_family == AF_INET6) {
             address.ipv6.sin6_port = htons (port);
             address.ipv6.sin6_scope_id = zone_id;
+            for (std::list<union address_t>::iterator it = addresses.begin();
+                    it != addresses.end(); ++it) {
+                it->ipv6.sin6_port = htons (port);
+                it->ipv6.sin6_scope_id = zone_id;
+            }
         }
-        else
+        else {
             address.ipv4.sin_port = htons (port);
+            for (std::list<union address_t>::iterator it = addresses.begin();
+                    it != addresses.end(); ++it) {
+                it->ipv4.sin_port = htons (port);
+            }
+        }
     }
 
     return 0;
@@ -697,8 +719,8 @@ int zmq::tcp_address_t::resolve (const char *name_, bool local_, bool ipv6_, boo
 
 int zmq::tcp_address_t::to_string (std::string &addr_)
 {
-    if (address.generic.sa_family != AF_INET
-    &&  address.generic.sa_family != AF_INET6) {
+    if (addresses.front ().generic.sa_family != AF_INET
+    &&  addresses.front ().generic.sa_family != AF_INET6) {
         addr_.clear ();
         return -1;
     }
@@ -712,14 +734,14 @@ int zmq::tcp_address_t::to_string (std::string &addr_)
         return rc;
     }
 
-    if (address.generic.sa_family == AF_INET6) {
+    if (addresses.front ().generic.sa_family == AF_INET6) {
         std::stringstream s;
-        s << "tcp://[" << hbuf << "]:" << ntohs (address.ipv6.sin6_port);
+        s << "tcp://[" << hbuf << "]:" << ntohs (addresses.front ().ipv6.sin6_port);
         addr_ = s.str ();
     }
     else {
         std::stringstream s;
-        s << "tcp://" << hbuf << ":" << ntohs (address.ipv4.sin_port);
+        s << "tcp://" << hbuf << ":" << ntohs (addresses.front ().ipv4.sin_port);
         addr_ = s.str ();
     }
     return 0;
@@ -727,15 +749,24 @@ int zmq::tcp_address_t::to_string (std::string &addr_)
 
 const sockaddr *zmq::tcp_address_t::addr () const
 {
-    return &address.generic;
+    return &addresses.front ().generic;
+}
+
+std::list<sockaddr *> zmq::tcp_address_t::addrs () const
+{
+    std::list<sockaddr *> list;
+    for (std::list<union address_t>::iterator it = addresses.begin();
+            it != addresses.end(); ++it)
+        list.push_back (&it->generic);
+    return list;
 }
 
 socklen_t zmq::tcp_address_t::addrlen () const
 {
-    if (address.generic.sa_family == AF_INET6)
-        return (socklen_t) sizeof (address.ipv6);
+    if (addresses.front ().generic.sa_family == AF_INET6)
+        return (socklen_t) sizeof (addresses.front ().ipv6);
     else
-        return (socklen_t) sizeof (address.ipv4);
+        return (socklen_t) sizeof (addresses.front ().ipv4);
 }
 
 const sockaddr *zmq::tcp_address_t::src_addr () const
@@ -745,7 +776,7 @@ const sockaddr *zmq::tcp_address_t::src_addr () const
 
 socklen_t zmq::tcp_address_t::src_addrlen () const
 {
-    if (address.generic.sa_family == AF_INET6)
+    if (source_address.generic.sa_family == AF_INET6)
         return (socklen_t) sizeof (source_address.ipv6);
     else
         return (socklen_t) sizeof (source_address.ipv4);
@@ -762,7 +793,7 @@ unsigned short zmq::tcp_address_t::family () const
 sa_family_t zmq::tcp_address_t::family () const
 #endif
 {
-    return address.generic.sa_family;
+    return addresses.front ().generic.sa_family;
 }
 
 zmq::tcp_address_mask_t::tcp_address_mask_t () :

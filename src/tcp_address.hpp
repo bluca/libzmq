@@ -30,6 +30,7 @@
 #ifndef __ZMQ_TCP_ADDRESS_HPP_INCLUDED__
 #define __ZMQ_TCP_ADDRESS_HPP_INCLUDED__
 
+#include <list>
 #if !defined ZMQ_HAVE_WINDOWS
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -62,6 +63,7 @@ namespace zmq
 #endif
         const sockaddr *addr () const;
         socklen_t addrlen () const;
+        std::list<sockaddr *> zmq::tcp_address_t::addrs () const;
 
         const sockaddr *src_addr () const;
         socklen_t src_addrlen () const;
@@ -77,11 +79,12 @@ namespace zmq
 		int wchar_to_utf8(const WCHAR * src, char ** dest) const;
 #endif
 
-        union {
+        union address_t {
             sockaddr generic;
             sockaddr_in ipv4;
             sockaddr_in6 ipv6;
         } address;
+        std::list <union address_t> addresses;
 
         union {
             sockaddr generic;
