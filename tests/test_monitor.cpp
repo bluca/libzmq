@@ -51,9 +51,37 @@ int main (void)
     assert (zmq_errno () == EPROTONOSUPPORT);
 
     //  Monitor all events on client and server sockets
-    rc = zmq_socket_monitor (client, "inproc://monitor-client", ZMQ_EVENT_ALL);
+    rc = zmq_socket_monitor (client, "inproc://monitor-client0", ZMQ_EVENT_ALL);
     assert (rc == 0);
-    rc = zmq_socket_monitor (server, "inproc://monitor-server", ZMQ_EVENT_ALL);
+    rc = zmq_socket_monitor (server, "inproc://monitor-server0", ZMQ_EVENT_ALL);
+    assert (rc == 0);
+
+    //  Do a first test without connecting to the monitors, to make sure that
+    //  there are no race conditions
+    //  https://github.com/zeromq/libzmq/issues/2829
+    rc = zmq_bind (server, "tcp://127.0.0.1:*");
+    assert (rc == 0);
+    rc = zmq_getsockopt (server, ZMQ_LAST_ENDPOINT, my_endpoint, &len);
+    assert (rc == 0);
+    rc = zmq_connect (client, my_endpoint);
+    assert (rc == 0);
+
+    bounce (server, client);
+
+    //  Close client and server
+    close_zero_linger (client);
+    close_zero_linger (server);
+
+    //  We'll monitor these two sockets
+    client = zmq_socket (ctx, ZMQ_DEALER);
+    assert (client);
+    server = zmq_socket (ctx, ZMQ_DEALER);
+    assert (server);
+
+    //  Monitor all events on client and server sockets
+    rc = zmq_socket_monitor (client, "inproc://monitor-client1", ZMQ_EVENT_ALL);
+    assert (rc == 0);
+    rc = zmq_socket_monitor (server, "inproc://monitor-server1", ZMQ_EVENT_ALL);
     assert (rc == 0);
 
     //  Create two sockets for collecting monitor events
@@ -63,9 +91,9 @@ int main (void)
     assert (server_mon);
 
     //  Connect these to the inproc endpoints so they'll get events
-    rc = zmq_connect (client_mon, "inproc://monitor-client");
+    rc = zmq_connect (client_mon, "inproc://monitor-client1");
     assert (rc == 0);
-    rc = zmq_connect (server_mon, "inproc://monitor-server");
+    rc = zmq_connect (server_mon, "inproc://monitor-server1");
     assert (rc == 0);
     
     //  Now do a basic ping test

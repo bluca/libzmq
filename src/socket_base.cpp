@@ -1648,6 +1648,14 @@ int zmq::socket_base_t::monitor (const char *addr_, int events_)
     if (rc == -1)
         stop_monitor (false);
 
+    //  Never block waiting to send messages, in case the other end is not
+    //  connected yet. Events are lossy - until the other side creates a monitor
+    //  they are always discarded anyway.
+    int timeout = 0;
+    rc = zmq_setsockopt (monitor_socket, ZMQ_SNDTIMEO, &timeout, sizeof (timeout));
+    if (rc == -1)
+        stop_monitor (false);
+
     //  Spawn the monitor socket endpoint
     rc = zmq_bind (monitor_socket, addr_);
     if (rc == -1)
@@ -1754,12 +1762,17 @@ void zmq::socket_base_t::monitor_event (int event_, intptr_t value_, const std::
         uint32_t value = (uint32_t) value_;
         memcpy (data + 0, &event, sizeof(event));
         memcpy (data + 2, &value, sizeof(value));
-        zmq_sendmsg (monitor_socket, &msg, ZMQ_SNDMORE);
+        if (zmq_sendmsg (monitor_socket, &msg, ZMQ_SNDMORE) == -1) {
+            zmq_msg_close (&msg);
+            return;
+        }
 
         //  Send address in second frame
         zmq_msg_init_size (&msg, addr_.size());
         memcpy (zmq_msg_data (&msg), addr_.c_str (), addr_.size ());
-        zmq_sendmsg (monitor_socket, &msg, 0);
+        if (zmq_sendmsg (monitor_socket, &msg, 0) == -1) {
+            zmq_msg_close (&msg);
+        }
     }
 }
 
