@@ -563,6 +563,10 @@ void setup_context_and_server_side (
     *server = zmq_socket (*ctx, ZMQ_DEALER);
     assert (*server);
 
+    const char server_monitor_endpoint[] = "inproc://monitor-server";
+    setup_handshake_socket_monitor (*ctx, *server, server_mon,
+                                    server_monitor_endpoint);
+
     socket_config_ (*server, socket_config_data_);
 
     rc =
@@ -575,10 +579,6 @@ void setup_context_and_server_side (
     size_t len = MAX_SOCKET_STRING;
     rc = zmq_getsockopt (*server, ZMQ_LAST_ENDPOINT, my_endpoint, &len);
     assert (rc == 0);
-
-    const char server_monitor_endpoint[] = "inproc://monitor-server";
-    setup_handshake_socket_monitor (*ctx, *server, server_mon,
-                                    server_monitor_endpoint);
 }
 
 void shutdown_context_and_server_side (void *ctx,
