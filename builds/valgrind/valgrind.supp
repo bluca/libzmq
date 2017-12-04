@@ -20,3 +20,40 @@
    fun:__libc_freeres
    ...
 }
+{
+   <atomic_ptr_msg_cas>
+   Helgrind:Race
+   fun:_ZN3zmq12atomic_ptr_tINS_5msg_tEE3casEPS1_S3_
+   ...
+}
+{
+   <atomic_ptr_msg_set>
+   Helgrind:Race
+   fun:_ZN3zmq12atomic_ptr_tINS_5msg_tEE3setEPS1_
+   ...
+}
+{
+   <atomic_ptr_command_cas>
+   Helgrind:Race
+   fun:_ZN3zmq12atomic_ptr_tINS_9command_tEE3casEPS1_S3_
+   ...
+}
+{
+   <atomic_ptr_command_set>
+   Helgrind:Race
+   fun:_ZN3zmq12atomic_ptr_tINS_9command_tEE3setEPS1_
+   ...
+}
+{
+   <ypipe_command_read>
+   Helgrind:Race
+   ...
+   fun:_ZN3zmq7ypipe_tINS_9command_tELi16EE4readEPS1_
+   ...
+}
+{
+   <ypipe_msg_read>
+   Helgrind:Race
+   ...
+   fun:_ZN3zmq7ypipe_tINS_5msg_tELi256EE4readEPS1_
+}
