@@ -137,6 +137,7 @@ int zmq::msg_t::init_external_storage (content_t *content_,
     _u.zclmsg.content->size = size_;
     _u.zclmsg.content->ffn = ffn_;
     _u.zclmsg.content->hint = hint_;
+    _u.zclmsg.content->zero_copy_id = 0;
     new (&_u.zclmsg.content->refcnt) zmq::atomic_counter_t ();
 
     return 0;
@@ -177,6 +178,7 @@ int zmq::msg_t::init_data (void *data_,
         _u.lmsg.content->size = size_;
         _u.lmsg.content->ffn = ffn_;
         _u.lmsg.content->hint = hint_;
+        _u.lmsg.content->zero_copy_id = 0;
         new (&_u.lmsg.content->refcnt) zmq::atomic_counter_t ();
     }
     return 0;
@@ -595,6 +597,21 @@ int zmq::msg_t::set_group (const char *group_, size_t length_)
     _u.base.group[length_] = '\0';
 
     return 0;
+}
+
+uint32_t zmq::msg_t::zero_copy_id ()
+{
+    if (_u.base.type == type_lmsg) {
+        return _u.lmsg.content->zero_copy_id;
+    }
+    return 0;
+}
+
+void zmq::msg_t::set_zero_copy_id (uint32_t zero_copy_id_)
+{
+    if (_u.base.type == type_lmsg) {
+        _u.lmsg.content->zero_copy_id = zero_copy_id_;
+    }
 }
 
 zmq::atomic_counter_t *zmq::msg_t::refcnt ()

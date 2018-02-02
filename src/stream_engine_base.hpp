@@ -102,7 +102,7 @@ class stream_engine_base_t : public io_object_t, public i_engine
     virtual int produce_pong_message (msg_t *msg_) { return -1; };
 
     virtual int read (void *data, size_t size_);
-    virtual int write (const void *data_, size_t size_);
+    virtual int write (const void *data_, size_t size_, bool *zero_copy_);
 
     void reset_pollout () { io_object_t::reset_pollout (_handle); }
     void set_pollout () { io_object_t::set_pollout (_handle); }
@@ -185,6 +185,9 @@ class stream_engine_base_t : public io_object_t, public i_engine
     msg_t _tx_msg;
 
     bool _io_error;
+
+    uint32_t zero_copy_counter;
+    std::vector<zmq::msg_t> free_list;
 
     //  The session this engine is attached to.
     zmq::session_base_t *_session;

@@ -323,6 +323,9 @@ bool zmq::stream_engine_base_t::in_event_internal ()
 
 void zmq::stream_engine_base_t::out_event ()
 {
+    static uint8_t free_skip = 1;
+    bool zero_copy = false;
+
     zmq_assert (!_io_error);
 
     //  If write buffer is empty, try to read new data from the encoder.
@@ -342,6 +345,7 @@ void zmq::stream_engine_base_t::out_event ()
             if ((this->*_next_msg) (&_tx_msg) == -1)
                 break;
             _encoder->load_msg (&_tx_msg);
+            zero_copy = _tx_msg.is_lmsg () ? true : false;
             unsigned char *bufptr = _outpos + _outsize;
             const size_t n =
               _encoder->encode (&bufptr, _options.out_batch_size - _outsize);
@@ -364,7 +368,29 @@ void zmq::stream_engine_base_t::out_event ()
     //  arbitrarily large. However, we assume that underlying TCP layer has
     //  limited transmission buffer and thus the actual number of bytes
     //  written should be reasonably modest.
-    const int nbytes = write (_outpos, _outsize);
+    const int nbytes = tcp_write (_s, _outpos, _outsize, &zero_copy);
+    if (zero_copy) {
+        _tx_msg.set_zero_copy_id (++zero_copy_counter);
+        zmq::msg_t msg;
+        msg.init ();
+        msg.copy (_tx_msg);
+        free_list.push_back (msg);
+        ++free_skip;
+    }
+    if (free_skip % 64 == 0) {
+        free_skip = 1;
+        uint32_t begin = 0, end = 0;
+        int rc = tcp_zero_copy_check_callbacks (_s, &begin, &end);
+        if (rc != -1) {
+            for (std::vector<zmq::msg_t>::iterator it = free_list.begin ();
+                 it != free_list.end (); it++) {
+                if (it->zero_copy_id () >= begin
+                    && it->zero_copy_id () <= end) {
+                    it->close ();
+                }
+            }
+        }
+    }
 
     //  IO error has occurred. We stop waiting for output events.
     //  The engine is not terminated until we detect input error;
@@ -750,7 +776,7 @@ int zmq::stream_engine_base_t::read (void *data_, size_t size_)
     return rc;
 }
 
-int zmq::stream_engine_base_t::write (const void *data_, size_t size_)
+int zmq::stream_engine_base_t::write (const void *data_, size_t size_, bool *zero_copy_)
 {
-    return zmq::tcp_write (_s, data_, size_);
+    return zmq::tcp_write (_s, data_, size_, zero_copy_);
 }

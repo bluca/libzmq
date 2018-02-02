@@ -71,6 +71,7 @@ class msg_t
         msg_free_fn *ffn;
         void *hint;
         zmq::atomic_counter_t refcnt;
+        uint32_t zero_copy_id;
     };
 
     //  Message flags.
@@ -152,6 +153,8 @@ class msg_t
     const char *group () const;
     int set_group (const char *group_);
     int set_group (const char *, size_t length_);
+    uint32_t zero_copy_id ();
+    void set_zero_copy_id (uint32_t zero_copy_id_);
 
     //  After calling this function you can copy the message in POD-style
     //  refs_ times. No need to call copy.

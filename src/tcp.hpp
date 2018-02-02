@@ -46,6 +46,9 @@ int set_tcp_send_buffer (fd_t sockfd_, int bufsize_);
 //  Sets the socket receive buffer size.
 int set_tcp_receive_buffer (fd_t sockfd_, int bufsize_);
 
+//  Enable zero-copy write syscalls (Linux only).
+int set_tcp_zero_copy (fd_t sockfd_);
+
 //  Tunes TCP keep-alives
 int tune_tcp_keepalives (fd_t s_,
                          int keepalive_,
@@ -59,7 +62,9 @@ int tune_tcp_maxrt (fd_t sockfd_, int timeout_);
 //  Writes data to the socket. Returns the number of bytes actually
 //  written (even zero is to be considered to be a success). In case
 //  of error or orderly shutdown by the other peer -1 is returned.
-int tcp_write (fd_t s_, const void *data_, size_t size_);
+int tcp_write (fd_t s_, const void *data_, size_t size_, bool *zero_copy_);
+
+int tcp_zero_copy_check_callbacks (fd_t s_, uint32_t *begin_, uint32_t *end_);
 
 //  Reads data from the socket (up to 'size' bytes).
 //  Returns the number of bytes actually read or -1 on error.

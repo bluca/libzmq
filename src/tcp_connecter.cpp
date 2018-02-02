@@ -188,6 +188,8 @@ int zmq::tcp_connecter_t::open ()
 
     const tcp_address_t *const tcp_addr = _addr->resolved.tcp_addr;
 
+    set_tcp_zero_copy (_s);
+
     int rc;
 
     // Set a source address for conversations

@@ -111,6 +111,8 @@ int zmq::tcp_listener_t::create_socket (const char *addr_)
     //  TODO why is this only done for the listener?
     make_socket_noninheritable (_s);
 
+    set_tcp_zero_copy (_s);
+
     //  Allow reusing of the address.
     int flag = 1;
     int rc;

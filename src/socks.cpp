@@ -75,8 +75,9 @@ void zmq::socks_greeting_encoder_t::encode (const socks_greeting_t &greeting_)
 
 int zmq::socks_greeting_encoder_t::output (fd_t fd_)
 {
-    const int rc =
-      tcp_write (fd_, _buf + _bytes_written, _bytes_encoded - _bytes_written);
+    bool f = false;
+    const int rc = tcp_write (fd_, _buf + _bytes_written,
+                              _bytes_encoded - _bytes_written, &f);
     if (rc > 0)
         _bytes_written += static_cast<size_t> (rc);
     return rc;
@@ -163,8 +164,9 @@ void zmq::socks_basic_auth_request_encoder_t::encode (
 
 int zmq::socks_basic_auth_request_encoder_t::output (fd_t fd_)
 {
+    bool f = false;
     const int rc =
-      tcp_write (fd_, _buf + _bytes_written, _bytes_encoded - _bytes_written);
+      tcp_write (fd_, _buf + _bytes_written, _bytes_encoded - _bytes_written, &f);
     if (rc > 0)
         _bytes_written += static_cast<size_t> (rc);
     return rc;
@@ -288,8 +290,9 @@ void zmq::socks_request_encoder_t::encode (const socks_request_t &req_)
 
 int zmq::socks_request_encoder_t::output (fd_t fd_)
 {
-    const int rc =
-      tcp_write (fd_, _buf + _bytes_written, _bytes_encoded - _bytes_written);
+    bool f = false;
+    const int rc = tcp_write (fd_, _buf + _bytes_written,
+                              _bytes_encoded - _bytes_written, &f);
     if (rc > 0)
         _bytes_written += static_cast<size_t> (rc);
     return rc;

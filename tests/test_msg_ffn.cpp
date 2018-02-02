@@ -55,12 +55,12 @@ void test_msg_ffn ()
     // Test that creating and closing a message triggers ffn
     zmq_msg_t msg;
     char hint[5];
-    char data[255];
-    memset (data, 0, 255);
+    char data[4096];
+    memset (data, 0, 4096);
     memcpy (data, (void *) "data", 4);
     memcpy (hint, (void *) "hint", 4);
     TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_msg_init_data (&msg, (void *) data, 255, ffn, (void *) hint));
+      zmq_msg_init_data (&msg, (void *) data, 4096, ffn, (void *) hint));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_close (&msg));
 
     msleep (SETTLE_TIME);
@@ -71,7 +71,7 @@ void test_msg_ffn ()
     zmq_msg_t msg2;
     zmq_msg_init (&msg2);
     TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_msg_init_data (&msg, (void *) data, 255, ffn, (void *) hint));
+      zmq_msg_init_data (&msg, (void *) data, 4096, ffn, (void *) hint));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_copy (&msg2, &msg));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_close (&msg2));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_close (&msg));
@@ -82,12 +82,12 @@ void test_msg_ffn ()
 
     // Test that sending a message triggers ffn
     TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_msg_init_data (&msg, (void *) data, 255, ffn, (void *) hint));
+      zmq_msg_init_data (&msg, (void *) data, 4096, ffn, (void *) hint));
 
     zmq_msg_send (&msg, dealer, 0);
-    char buf[255];
-    TEST_ASSERT_SUCCESS_ERRNO (zmq_recv (router, buf, 255, 0));
-    TEST_ASSERT_EQUAL_INT (255, zmq_recv (router, buf, 255, 0));
+    char buf[4096];
+    TEST_ASSERT_SUCCESS_ERRNO (zmq_recv (router, buf, 4096, 0));
+    TEST_ASSERT_EQUAL_INT (4096, zmq_recv (router, buf, 4096, 0));
     TEST_ASSERT_EQUAL_STRING_LEN (data, buf, 4);
 
     msleep (SETTLE_TIME);
@@ -98,12 +98,12 @@ void test_msg_ffn ()
     // Sending a copy of a message triggers ffn
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_init (&msg2));
     TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_msg_init_data (&msg, (void *) data, 255, ffn, (void *) hint));
+      zmq_msg_init_data (&msg, (void *) data, 4096, ffn, (void *) hint));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_copy (&msg2, &msg));
 
     zmq_msg_send (&msg, dealer, 0);
-    TEST_ASSERT_SUCCESS_ERRNO (zmq_recv (router, buf, 255, 0));
-    TEST_ASSERT_EQUAL_INT (255, zmq_recv (router, buf, 255, 0));
+    TEST_ASSERT_SUCCESS_ERRNO (zmq_recv (router, buf, 4096, 0));
+    TEST_ASSERT_EQUAL_INT (4096, zmq_recv (router, buf, 4096, 0));
     TEST_ASSERT_EQUAL_STRING_LEN (data, buf, 4);
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_close (&msg2));
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_close (&msg));
