@@ -83,15 +83,37 @@ uint32_t zmq::generate_random ()
 //  static lock to serialize calls into an initialiser and a finaliser,
 //  using refcounts to make sure that a thread does not close the library
 //  while another is still using it.
+//  Note that given this is a global static variable we cannot use the
+//  zmq::mutex_t class, as it has a non-trivial destructor, and the order
+//  of de-allocation is not defined and subject to races (context could be
+//  de-alloacated first). See issue #2915
+//  TODO: a similar solution needs to be implemented for Windows
 static unsigned int random_refcount = 0;
-static zmq::mutex_t random_sync;
 
-void zmq::random_open (void)
-{
+#ifndef ZMQ_HAVE_WINDOWS
+//  On *NIX this is easy, just use a static global mutex with its static
+//  initialiser, which means there is no need for de-allocation.
+static pthread_mutex_t random_sync = PTHREAD_MUTEX_INITIALIZER;
+#else
+//  On Windows there is no static initialiser for the critical section,
+//  so fallback to racy implementation.
+static zmq::mutex_t random_sync;
+#endif
+
+//  This whole ordeal is necessary only when using libsodium (init/close not
+//  thread safe) or tweetnacl with /dev/random
 #if defined(ZMQ_USE_LIBSODIUM)                                                 \
   || (defined(ZMQ_USE_TWEETNACL) && !defined(ZMQ_HAVE_WINDOWS)                 \
       && !defined(ZMQ_HAVE_GETRANDOM))
+
+void zmq::random_open (void)
+{
+#ifndef ZMQ_HAVE_WINDOWS
+    int rc = pthread_mutex_lock (&random_sync);
+    posix_assert (rc);
+#else
     scoped_lock_t locker (random_sync);
+#endif
 
     if (random_refcount == 0) {
         int rc = sodium_init ();
@@ -99,21 +121,43 @@ void zmq::random_open (void)
     }
 
     ++random_refcount;
-#else
-    LIBZMQ_UNUSED (random_refcount);
+
+#ifndef ZMQ_HAVE_WINDOWS
+    rc = pthread_mutex_unlock (&random_sync);
+    posix_assert (rc);
 #endif
 }
 
 void zmq::random_close (void)
 {
-#if defined(ZMQ_USE_LIBSODIUM)                                                 \
-  || (defined(ZMQ_USE_TWEETNACL) && !defined(ZMQ_HAVE_WINDOWS)                 \
-      && !defined(ZMQ_HAVE_GETRANDOM))
+#ifndef ZMQ_HAVE_WINDOWS
+    int rc = pthread_mutex_lock (&random_sync);
+    posix_assert (rc);
+#else
     scoped_lock_t locker (random_sync);
+#endif
+
     --random_refcount;
 
     if (random_refcount == 0) {
         randombytes_close ();
     }
+
+#ifndef ZMQ_HAVE_WINDOWS
+    rc = pthread_mutex_unlock (&random_sync);
+    posix_assert (rc);
 #endif
 }
+
+#else
+
+void zmq::random_open (void)
+{
+    LIBZMQ_UNUSED (random_refcount);
+    LIBZMQ_UNUSED (random_sync);
+}
+
+void zmq::random_close (void)
+{
+}
+#endif
